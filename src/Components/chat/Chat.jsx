@@ -1,140 +1,152 @@
-import { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import './Chat.css';
-import EmojiPicker from 'emoji-picker-react';
-import { arrayUnion, doc, getDoc, onSnapshot, updateDoc } from 'firebase/firestore';
-import { getDownloadURL, ref, uploadBytesResumable } from 'firebase/storage';
-import { db, storage } from '../../libray/firebase';
+import { arrayUnion, doc, onSnapshot, updateDoc, getDoc, setDoc } from 'firebase/firestore';
+import { db } from '../../libray/firebase';
 import { useChatStore } from '../../libray/chatsStore';
 import { useUserStore } from '../../libray/userStore';
+import { handleFileUpload, uploadImage } from './fileUpload';
 
 const Chat = () => {
-    const [open, setOpen] = useState(false);
     const [text, setText] = useState("");
     const [image, setImage] = useState(null);
-    const [imagePreview, setImagePreview] = useState(null);
     const [chat, setChat] = useState(null);
     const [uploading, setUploading] = useState(false);
     const [isRecording, setIsRecording] = useState(false);
-    const [recorder, setRecorder] = useState(null);
-    const [mediaStream, setMediaStream] = useState(null);
+    const [audioPreviewUrl, setAudioPreviewUrl] = useState(null);
+    const [imagePreview, setImagePreview] = useState(null);
+    const [showEmojiPicker, setShowEmojiPicker] = useState(false);
+    const [recordingTime, setRecordingTime] = useState(0);
+    const [recordingBlob, setRecordingBlob] = useState(null);
+    const [startTime, setStartTime] = useState(null);
+    const [imageLoading, setImageLoading] = useState(true);
+    const [imageError, setImageError] = useState(false);
 
-    const { chatId } = useChatStore();
+   
     const { currentUser } = useUserStore();
+   
+    const { chatId, user, isReceiverBlocked, isCurrentBlocked, changeBlock } = useChatStore()
+
+
 
     const inputRef = useRef(null);
-    const recorderRef = useRef(null); // Ref for the recorder element
-    const blinkerRef = useRef(null); // Ref for the blinking indicator
-
-    const handleEmoji = (e) => {
-        setText((prev) => prev + e.emoji);
-        setOpen(false);
-    };
-
-    const handleSend = async () => {
-        if (!text && !image && !isRecording) return;
-
-        try {
-            setUploading(true);
-
-            if (image) {
-                const storageRef = ref(storage, `images/${chatId}/${Date.now()}_${image.name}`);
-                const uploadTask = uploadBytesResumable(storageRef, image);
-
-                uploadTask.on(
-                    'state_changed',
-                    (snapshot) => {
-                        const progress = (snapshot.bytesTransferred / snapshot.totalBytes) * 100;
-                        console.log(`Upload is ${progress}% done`);
-                    },
-                    (error) => {
-                        console.error('Upload failed', error);
-                        setUploading(false);
-                    },
-                    async () => {
-                        const imageUrl = await getDownloadURL(uploadTask.snapshot.ref);
-                        await sendMessage(imageUrl);
-                        setImage(null); // Clear the selected image
-                        setImagePreview(null); // Clear the image preview
-                        setUploading(false);
-                    }
-                );
-            } else if (isRecording) {
-                recorder.stop();
-                setIsRecording(false);
-            } else {
-                await sendMessage();
-                setUploading(false);
-            }
-        } catch (error) {
-            console.log(error);
-            setUploading(false);
-        }
-    };
-
-    const sendMessage = async (contentUrl = null) => {
-        try {
-            await updateDoc(doc(db, 'chats', chatId), {
-                messages: arrayUnion({
-                    senderId: currentUser.user,
-                    text,
-                    imageUrl: contentUrl,
-                    createdAt: new Date()
-                })
-            });
-
-            const userChatRef = doc(db, "userChats", currentUser.user);
-            const userChatSnapShot = await getDoc(userChatRef);
-
-            if (userChatSnapShot.exists()) {
-                const userChatData = userChatSnapShot.data();
-                const chats = userChatData.chats || [];
-
-                const chatIndex = chats.findIndex(c => c.cId === chatId);
-                if (chatIndex !== -1) {
-                    chats[chatIndex].lastMessage = text || 'Image';
-                    chats[chatIndex].isSeen = true;
-                    chats[chatIndex].updatedAt = Date.now();
-
-                    await updateDoc(userChatRef, {
-                        chats: chats,
-                    });
-                }
-            }
-
-            setText(""); // Clear the input area after sending the message
-        } catch (error) {
-            console.log(error);
-        }
-    };
+    const recorderRef = useRef(null);
 
     useEffect(() => {
         inputRef.current?.scrollIntoView({ behavior: 'smooth' });
     }, [chat?.messages]);
 
     useEffect(() => {
-        const unSub = onSnapshot(doc(db, "chats", chatId), (res) => {
-            setChat(res.data());
+        const unsubscribe = onSnapshot(doc(db, "chats", chatId), (snapshot) => {
+            setChat(snapshot.data());
+            console.log(snapshot.data())
         });
+     
 
-        return () => {
-            unSub();
-        };
+        return () => unsubscribe();
+   
     }, [chatId]);
 
-    const handleImageUpload = (e) => {
-        if (e.target.files[0]) {
-            const selectedImage = e.target.files[0];
-            setImage(selectedImage);
+  
+    const handleImageLoaded = () => {
+        setImageLoading(false);
+        setImageError(false);
+    };
 
-            // Preview the selected image
+    const handleImageError = () => {
+        setImageLoading(false);
+        setImageError(true);
+    };
+
+    
+const handleImageUpload = async (e) => {
+        const file = e.target.files[0];
+        if (file) {
             const reader = new FileReader();
-            reader.onload = () => {
+            reader.onloadend = () => {
                 setImagePreview(reader.result);
             };
-            reader.readAsDataURL(selectedImage);
+            reader.readAsDataURL(file);
+
+            setUploading(true);
+            try {
+                const imageUrl = await uploadImage(file, chatId);
+                await sendMessage(imageUrl, 'image');
+            } catch (error) {
+                console.error('Error uploading image:', error);
+            } finally {
+                setUploading(false);
+                setImagePreview(null);
+            }
         }
     };
 
+
+    const handleMicClick = () => {
+        if (isRecording) {
+            stopRecording();
+        } else {
+            startRecording();
+        }
+    };
+    
+
+    const sendMessage = async (contentUrl = null, messageType = 'text') => {
+        try {
+            const messageData = {
+                senderId: currentUser.user,
+                createdAt: new Date()
+            };
+
+            if (messageType === 'text') {
+                messageData.text = text;
+            } else {
+                messageData.fileUrl = contentUrl;
+                messageData.type = messageType;
+            }
+
+            const chatRef = doc(db, 'chats', chatId);
+
+            const chatDoc = await getDoc(chatRef);
+            if (!chatDoc.exists()) {
+                await setDoc(chatRef, {
+                    messages: []
+                });
+            }
+
+            await updateDoc(chatRef, {
+                messages: arrayUnion(messageData)
+            });
+
+            setText("");
+            setShowEmojiPicker(false);
+            setRecordingTime(0);
+
+            // Update last seen and last message
+            const userIds = [currentUser.user, 'receiverId']; // Replace 'otherUserId' with the actual user ID
+            userIds.forEach(async (id) => {
+                const userChatsRef = doc(db, 'userChats', id);
+                const userChatsSnapshot = await getDoc(userChatsRef);
+
+                if (userChatsSnapshot.exists) {
+                    const userChatsData = userChatsSnapshot.data();
+                    const chatIndex = userChatsData.chats.findIndex(c => c.chatId === chatId);
+
+                    if (chatIndex !== -1) {
+                        userChatsData.chats[chatIndex].lastMessage = messageType === 'text' ? text : contentUrl;
+                        userChatsData.chats[chatIndex].isSeen = id === currentUser.user;
+                        userChatsData.chats[chatIndex].updatedAt = new Date();
+
+                        await updateDoc(userChatsRef, {
+                            chats: userChatsData.chats
+                        });
+                    }
+                }
+            });
+
+        } catch (error) {
+            console.error('Error updating chat:', error);
+        }
+    };
     const getTimeAgo = (timestamp) => {
         const now = new Date();
         const messageTime = new Date(timestamp);
@@ -154,66 +166,86 @@ const Chat = () => {
         }
     };
 
-    const handleMicClick = async () => {
+    const startRecording = async () => {
         try {
             const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-
-            const recorderInstance = new MediaRecorder(stream);
-            recorderInstance.ondataavailable = (e) => {
-                const chunks = [];
+            const recorder = new MediaRecorder(stream);
+            const chunks = [];
+    
+            recorder.ondataavailable = (e) => {
                 chunks.push(e.data);
             };
-
-            recorderInstance.onstop = async () => {
+    
+            recorder.onstop = () => {
                 const blob = new Blob(chunks, { type: 'audio/webm' });
-                const url = URL.createObjectURL(blob);
-                setAudioURL(url);
-
-                const storageRef = ref(storage, `audio/${Date.now()}_${currentUser.uid}.webm`);
-                const uploadTask = uploadBytesResumable(storageRef, blob);
-
-                uploadTask.on(
-                    'state_changed',
-                    (snapshot) => {
-                        const progress = (snapshot.bytesTransferred / snapshot.totalBytes) * 100;
-                        console.log(`Upload is ${progress}% done`);
-                    },
-                    (error) => {
-                        console.error('Upload failed', error);
-                    },
-                    () => {
-                        getDownloadURL(uploadTask.snapshot.ref).then((downloadURL) => {
-                            sendMessage(downloadURL);
-                            setAudioURL(null); // Clear the recorded audio URL after sending
-                        });
-                    }
-                );
+                setRecordingBlob(blob);
+                const audioUrl = URL.createObjectURL(blob);
+                setAudioPreviewUrl(audioUrl);
             };
-
-            setRecorder(recorderInstance);
-            setMediaStream(stream);
+    
+            recorderRef.current = recorder;
             setIsRecording(true);
+            setStartTime(Date.now());
+            recorder.start();
+    
+            const timerInterval = setInterval(() => {
+                setRecordingTime((prevTime) => prevTime + 1); // Increment recording time by 1 second
+            }, 1000);
+    
+            return () => {
+                clearInterval(timerInterval);
+            };
         } catch (error) {
             console.error('Error accessing microphone:', error);
         }
     };
+    
 
-    const handleBlinker = () => {
-        if (blinkerRef.current) {
-            blinkerRef.current.style.backgroundColor = 'red';
-            setTimeout(() => {
-                blinkerRef.current.style.backgroundColor = 'transparent';
-            }, 500);
+    
+    const stopRecording = async () => {
+        try {
+            if (recorderRef.current && recorderRef.current.state === 'recording') {
+                recorderRef.current.stop();
+                setIsRecording(false);
+                clearInterval(timerInterval); // Clear the interval timer
+    
+                const blob = recorderRef.current.stream.getTracks()[0];
+                const audioUrl = URL.createObjectURL(blob);
+                setAudioPreviewUrl(audioUrl);
+                
+                const messageUrl = await uploadAudio(audioUrl, chatId); // Replace with your upload function
+                await sendMessage(messageUrl, 'audio'); // Assuming sendMessage handles audio messages
+    
+                // Clean up or reset state as needed
+                setAudioPreviewUrl(null);
+                setRecordingBlob(null);
+            }
+        } catch (error) {
+            console.error('Error stopping recorder:', error);
         }
+    };
+    
+
+    const handleDeleteAudioPreview = () => {
+        setAudioPreviewUrl(null);
+        setRecordingBlob(null);
+    };
+
+    const toggleEmojiPicker = () => {
+        setShowEmojiPicker(!showEmojiPicker);
+    };
+
+    const handleEmojiSelect = (emoji) => {
+        setText(text + emoji.native);
     };
 
     return (
         <div className='chat'>
-            <div className="top">
+             <div className="top">
                 <div className="user">
-                    <img src="public/avatar.png" alt="" />
+                    <img src={user.avatar || "public/avatar.png"} alt="" />
                     <div className="texts">
-                        <span>kevin</span>
+                        <span>{user.username}.</span>
                         <p>Lorem ipsum, dolor sit</p>
                     </div>
                 </div>
@@ -224,44 +256,96 @@ const Chat = () => {
                 </div>
             </div>
             <div className="center">
-                {chat?.messages?.map((message) => (
-                    <div className={`message ${message.senderId === currentUser.user ? 'own' : ''}`} key={message?.createdAt}>
+                {chat?.messages.map((message, index) => (
+                    <div key={index} className={`message ${message.senderId === currentUser.user ? 'own' : ''}`}>
                         <div className="text">
-                            {message.imageUrl && <img src={message.imageUrl} alt="message content" />}
-                            <p>{message.text}</p>
-                            <span>{getTimeAgo(message.createdAt)}</span>
+
+                          { message.text && <p>{message.text}</p>}
+                            <span>{getTimeAgo(message.createdAt?.toDate())}</span>
+
+                          
+                            {message.type === 'image' && (
+                            <div style={{ position: 'relative', maxHeight: '100px' }}>
+                                {imageLoading && !imageError && <div></div>}
+                                {imageError && <img src="placeholder.png" alt="Image not available" style={{ maxHeight: '100px' }} />}
+                                <img 
+                                    src={message.fileUrl} 
+                                    alt="message content"  
+                                    style={{ display: imageError ? 'none' : 'block', maxHeight: '100px' }} 
+                                    onLoad={handleImageLoaded}
+                                    onError={handleImageError}
+                                />
+                            </div>
+                        )}
+                           
+
+                            {message.type === 'file' && (
+                                <div className="file-preview">
+                                    <a href={message.fileUrl} target="_blank" rel="noopener noreferrer" download>
+                                        <img src="file.svg" alt="File Icon" style={{ maxWidth: '50px', maxHeight: '50px' }} />
+                                    </a>
+                                    <span>{getTimeAgo(message.createdAt?.toDate())}</span>
+                                </div>
+                            )}
                         </div>
                     </div>
                 ))}
             </div>
+
             <div className="bottom">
                 <div className="icons">
-                    <input type="file" accept="image/*" onChange={handleImageUpload} style={{ display: 'none' }} id="imageUpload" />
-                    <label htmlFor="imageUpload">
-                        <img src="public/img.png" alt="Upload" />
-                    </label>
+                    {uploading ? (
+                        <div className="loading-spinner">uploading...</div>
+                    ) : (
+                        <>
+                            <input type="file" accept="image/*" onChange={handleImageUpload} style={{ display: 'none' }} id="imageUpload" />
+                            <label htmlFor="imageUpload">
+                                <img src="public/img.png" alt="Upload Image" />
+                            </label>
+
+                            <input type="file" accept="*/*" onChange={(e) => handleFileUpload(e.target.files[0], chatId, setUploading, sendMessage)} style={{ display: 'none' }} id="fileUpload" />
+                            <label htmlFor="fileUpload">
+                                <img src="public/plus.png" alt="Upload File" />
+                            </label>
+                        </>
+                    )}
                     {isRecording ? (
-                        <div className="recorder" ref={recorderRef}>
-                            <div className="recording-indicator" ref={blinkerRef}></div>
-                            <button onClick={handleMicClick} style={{ marginLeft: '10px' }}>Stop Recording</button>
+                        <div className="recorder">
+                            <div className="recording-indicator">
+                                
+                            </div>
+                            <button onClick={stopRecording}></button>
+                            <span>{recordingTime}s</span>
                         </div>
                     ) : (
-                        <img src="public/mic.png" alt="" onClick={handleMicClick} />
+                        <img src="public/mic.png" alt="Record Audio" onClick={handleMicClick} />
                     )}
                 </div>
                 {imagePreview && (
                     <div className="image-preview">
-                        <img src={imagePreview} alt="Image Preview" style={{ maxWidth: '50px' }} />
+                        <img src={imagePreview} alt="Image Preview" />
+                    </div>
+                )}
+                {audioPreviewUrl && (
+                    <div className="audio-preview">
+                        <audio controls>
+                            <source src={audioPreviewUrl} type="audio/webm" />
+                            Your browser does not support the audio element.
+                        </audio>
+                        <button onClick={handleDeleteAudioPreview}>Delete</button>
                     </div>
                 )}
                 <input
                     type="text"
-                    placeholder="Type a message"
-                    onChange={(e) => setText(e.target.value)}
+                    placeholder={(isReceiverBlocked || isCurrentBlocked) ? "You are Blocked" : "Type a message..."}
                     value={text}
+                    onChange={(e) => setText(e.target.value)}
                     ref={inputRef}
+                    disabled={isReceiverBlocked || isCurrentBlocked}
+                  
+                    
                 />
-                <button onClick={handleSend}>Send</button>
+                <button className="sendButton" onClick={sendMessage} disabled={isReceiverBlocked || isCurrentBlocked}>Send</button>
             </div>
         </div>
     );

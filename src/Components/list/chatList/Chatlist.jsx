@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import './Chatlist.css';
 import { useUserStore } from '../../../libray/userStore';
-import { doc, getDoc, onSnapshot } from 'firebase/firestore';
+import { doc, getDoc, onSnapshot, updateDoc } from 'firebase/firestore'; // Import updateDoc
 import { db } from '../../../libray/firebase';
 import AddUser from '../../addUser/addUser';
 import { useChatStore } from '../../../libray/chatsStore';
@@ -34,7 +34,9 @@ const Chatlist = () => {
                     });
 
                     const chatData = await Promise.all(promises);
-                    setChats(chatData.sort((a, b) => b.updatedAt - a.updatedAt));
+                    // Sort chats by updatedAt in descending order
+                    const sortedChats = chatData.sort((a, b) => b.updatedAt - a.updatedAt);
+                    setChats(sortedChats);
                 } catch (error) {
                     console.error("Error fetching chat data:", error);
                     setChats([]);
@@ -53,7 +55,24 @@ const Chatlist = () => {
         };
     }, [currentUser]);
 
-    const handleSelect = (chat) => {
+    const handleSelect = async (chat) => {
+        // Update local state to mark chat as seen
+        const updatedChats = chats.map((item) =>
+            item.chatId === chat.chatId ? { ...item, isSeen: true } : item
+        );
+        setChats(updatedChats);
+
+        // Update Firestore document with updated chat list
+        const userChatsRef = doc(db, 'userChats', currentUser.user);
+        try {
+            await updateDoc(userChatsRef, {
+                chats: updatedChats,
+            });
+        } catch (error) {
+            console.error("Error updating document:", error);
+        }
+
+        // Change chat in the application state
         changeChat(chat.chatId, chat.user);
     };
 
@@ -84,11 +103,14 @@ const Chatlist = () => {
                         className={`item ${!chat.isSeen ? 'unseen' : ''}`} 
                         key={chat.chatId} 
                         onClick={() => handleSelect(chat)}
+                        style={{
+                            backgroundColor: chat.isSeen ? "transparent" : "#5183fe"
+                        }}
                     >
                         <img src={chat.user?.avatar || "public/avatar.png"} alt="" />
                         <div className="text">
-                            <span>{chat.user?.username || 'Unknown User'}</span>
-                            <p>{truncateMessage(chat.lastMessage, 50)}</p> {/* Truncate message to a preview */}
+                            <span>{chat.user?.blocked.includes(currentUser.user) ? "User" : chat.user.username}</span>
+                            <p>{truncateMessage(chat.lastMessage?.text, 10)}</p>
                         </div>
                     </div>
                 ))
