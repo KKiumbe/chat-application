@@ -9,9 +9,13 @@ import { useChatStore } from '../../../libray/chatsStore';
 const Chatlist = () => {
     const [addMode, setMode] = useState(false);
     const [chats, setChats] = useState([]);
+
+    const {user,isReceiverBlocked} = useChatStore()
   
-    const { currentUser } = useUserStore();
+   
     const { changeChat } = useChatStore();
+
+    const { currentUser}= useUserStore()
 
     useEffect(() => {
         if (!currentUser?.user) {
@@ -35,8 +39,9 @@ const Chatlist = () => {
 
                     const chatData = await Promise.all(promises);
                     // Sort chats by updatedAt in descending order
-                    const sortedChats = chatData.sort((a, b) => b.updatedAt - a.updatedAt);
+                    const sortedChats = chatData.sort((a, b) => b.updatedAt.seconds - a.updatedAt.seconds);
                     setChats(sortedChats);
+             
                 } catch (error) {
                     console.error("Error fetching chat data:", error);
                     setChats([]);
@@ -54,6 +59,7 @@ const Chatlist = () => {
             unSub();
         };
     }, [currentUser]);
+    console.log(chats)
 
     const handleSelect = async (chat) => {
         // Update local state to mark chat as seen
@@ -98,18 +104,18 @@ const Chatlist = () => {
             </div>
 
             {chats.length > 0 ? (
-                chats.map((chat) => (
+                chats.map((chat,index) => (
                     <div 
                         className={`item ${!chat.isSeen ? 'unseen' : ''}`} 
-                        key={chat.chatId} 
+                        key={index} 
                         onClick={() => handleSelect(chat)}
                         style={{
                             backgroundColor: chat.isSeen ? "transparent" : "#5183fe"
                         }}
                     >
-                        <img src={chat.user?.avatar || "public/avatar.png"} alt="" />
+                        <img src={isReceiverBlocked ? "public/avatar.png" : user?.avatar} alt="" />
                         <div className="text">
-                            <span>{chat.user?.blocked.includes(currentUser.user) ? "User" : chat.user.username}</span>
+                            <span>{isReceiverBlocked ? "User" : user?.username}</span>
                             <p>{truncateMessage(chat.lastMessage?.text, 10)}</p>
                         </div>
                     </div>

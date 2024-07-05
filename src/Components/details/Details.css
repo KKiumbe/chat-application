@@ -1,136 +1,115 @@
-.details{
+.details {
     flex: 1;
-   
+}
 
-    .user{
-        display: flex;
-        padding: 30px 20px; 
-        flex-direction: column;
-        align-items: center;
-        gap: 20px;
-        border-bottom: 1px solid #dddd;
+.details .user {
+    display: flex;
+    padding: 30px 20px; 
+    flex-direction: column;
+    align-items: center;
+    gap: 20px;
+    border-bottom: 1px solid #dddd;
+}
 
-        img{
-            width: 100px;
-            height: 100px;
-            border-radius: 50%;
-            object-fit: cover;
-        }
-        h2{
-          
-            
-        }
-        p{
+.details .user img {
+    width: 100px;
+    height: 100px;
+    border-radius: 50%;
+    object-fit: cover;
+}
 
+.details .user h2 {
+    /* Add your styles for h2 here */
+}
 
-        }
+.details .user p {
+    /* Add your styles for p here */
+}
 
+.details .info {
+    padding: 20px;
+    display: flex;
+    flex-direction: column;
+    gap: 30px;
+}
 
-    }
+.details .info .option .title {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+}
 
-    .info{
-        padding: 20px;
-        display: flex;
-        flex-direction: column;
-        gap: 30px;
+.details .info .option .title img {
+    width: 30px;
+    height: 30px;
+    background-color: rgba(17, 25, 40, 0.3);
+    padding: 10px;
+    border-radius: 50%;
+    cursor: pointer;
+    object-fit: cover;
+    display: block; /* Ensures no extra space is added around the image */
+}
 
-        .option{
+.details .info .photos,
+.details .info .files {
+    max-height: 300px; /* Adjust height as needed */
+    overflow-y: auto; /* Enable vertical scrolling */
+    margin-top: 10px; /* Adjust spacing as needed */
+}
 
-            .title{
-                display: flex;
-                align-items: center;
-                justify-content: space-between;
-                gap: 10px;
-                img {
-                    width: 30px;
-                    height: 30px;
-                    background-color: rgba(17, 25, 40, 0.3);
-                    padding: 10px;
-                    border-radius: 50%;
-                    cursor: pointer;
-                    object-fit: cover;
-                    display: block; /* Ensures no extra space is added around the image */
-                }
-                
-            }
+.details .info .photos .photoItem {
+    display: flex;
+    align-items: center;
+    border-radius: 5px;
+    justify-content: space-between;
+}
 
-            
+.details .info .photos .photoItem .photoDetails {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 20px;
+}
 
-            
-        }
+.details .info .photos .photoItem .photoDetails img {
+    width: 40px;
+    height: 40px;
+    border-radius: 5px;
+}
 
-        .photos{
-            display: flex;
-            flex-direction: column;
-            gap: 20px;
-            margin-top: 1px solid #dddd;
+.details .info .photos .photoItem .photoDetails span {
+    font-size: 0.9rem;
+    font-weight: 300;
+    color: grey; /* Corrected from 'flood-color' */
+}
 
-            .photoItem{
-                display: flex;
-                align-items: center;
-                border-radius: 5px;
-                justify-content: space-between;
+.details .info .photos .photoItem .icon img {
+    width: 20px;
+    height: 20px;
+    border-radius: 5px;
+    cursor: pointer;
+}
 
-                .photoDetails{
-                    display: flex;
-                    align-items: center;
-                    justify-content: space-between;
-                    gap: 20px;
+.details button {
+    padding: 10px 20px;
+    background-color: rgba(230, 74, 105, 0.553);
+    color: white;
+    border: none;
+    border-radius: 10px;
+    cursor: pointer;
+}
 
+.details button:hover {
+    background-color: #f1c0c0;
+}
 
+.details button.logout {
+    padding: 10px;
+    background-color: aliceblue;
+    color: black;
+}
 
-                img{
-                    width: 40px;
-                    height: 40px;
-                    border-radius: 5px;
-                }
-                span{
-                    font-size: 0.9rem;
-                    font-weight: 300;
-                    flood-color: grey;
-                }
-              
-              
-                  
-
-            }
-
-            .icon{
-                img{
-                    width: 20px;
-                    height: 20px;
-                    border-radius: 5px;
-                    cursor: pointer;
-                }
-
-               }
-
-            }
-            
-        }
-
-
-
-    button{
-        padding: 10px 20px;
-        background-color: rgb(230, 74, 105,0.553);
-        color: white;
-        border: none;
-        border-radius: 10px;
-        cursor: pointer;
-
-       &:hover{
-            background-color: #f1c0c0;
-        }
-        &.logout{
-            padding: 10px;
-            background-color: aliceblue;
-            color: black;
-            &:hover{
-               background-color: rgb(230, 74, 105,0.553);;
-            }
-        }
-    }
-    }
-    .
+.details button.logout:hover {
+    background-color: rgba(230, 74, 105, 0.553);
 }

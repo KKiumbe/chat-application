@@ -40,6 +40,8 @@ const Chat = () => {
             setChat(snapshot.data());
             console.log(snapshot.data())
         });
+
+        //console.log(chat.messages)
      
 
         return () => unsubscribe();
