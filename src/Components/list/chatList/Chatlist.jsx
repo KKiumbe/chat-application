@@ -113,10 +113,11 @@ const Chatlist = () => {
                             backgroundColor: chat.isSeen ? "transparent" : "#5183fe"
                         }}
                     >
-                        <img src={isReceiverBlocked ? "public/avatar.png" : user?.avatar} alt="" />
+                        <img src={isReceiverBlocked ? "public/avatar.png" : (user?.avatar || "public/avatar.png")} alt="" />
+                      
                         <div className="text">
                             <span>{isReceiverBlocked ? "User" : user?.username}</span>
-                            <p>{truncateMessage(chat.lastMessage?.text, 10)}</p>
+                            <p>{truncateMessage(chat.lastMessage, 5)}</p>
                         </div>
                     </div>
                 ))

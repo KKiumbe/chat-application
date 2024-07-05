@@ -24,7 +24,7 @@ const Chat = () => {
    
     const { currentUser } = useUserStore();
    
-    const { chatId, user, isReceiverBlocked, isCurrentBlocked, changeBlock } = useChatStore()
+    const { chatId, user, isReceiverBlocked, isCurrentBlocked} = useChatStore()
 
 
 
@@ -134,7 +134,7 @@ const handleImageUpload = async (e) => {
                     const chatIndex = userChatsData.chats.findIndex(c => c.chatId === chatId);
 
                     if (chatIndex !== -1) {
-                        userChatsData.chats[chatIndex].lastMessage = messageType === 'text' ? text : contentUrl;
+                        userChatsData.chats[chatIndex].lastMessage = text;
                         userChatsData.chats[chatIndex].isSeen = id === currentUser.user;
                         userChatsData.chats[chatIndex].updatedAt = new Date();
 
@@ -245,9 +245,9 @@ const handleImageUpload = async (e) => {
         <div className='chat'>
              <div className="top">
                 <div className="user">
-                    <img src={user.avatar || "public/avatar.png"} alt="" />
+                <img src={isReceiverBlocked ? "public/avatar.png" : (user?.avatar || "public/avatar.png")} alt="" />
                     <div className="texts">
-                        <span>{user.username}.</span>
+                    <span>{isReceiverBlocked ? "User" : user?.username}</span>
                         <p>Lorem ipsum, dolor sit</p>
                     </div>
                 </div>

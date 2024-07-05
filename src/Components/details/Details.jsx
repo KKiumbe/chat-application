@@ -1,99 +1,66 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useCallback } from 'react';
 import './Details.css';
-import { updateDoc, arrayUnion, arrayRemove, doc, collection, getDocs, onSnapshot } from 'firebase/firestore';
+import { updateDoc, arrayUnion, arrayRemove, doc, onSnapshot } from 'firebase/firestore';
 import { useChatStore } from '../../libray/chatsStore'; // Assuming this path is correct
 import { auth, db } from '../../libray/firebase'; // Assuming this path is correct
 import { useUserStore } from '../../libray/userStore'; // Assuming this path is correct
 
 const Details = () => {
   const { setLoading, setCurrentUser } = useUserStore();
-  const { user, isReceiverBlocked, isCurrentBlocked, changeBlock, chat } = useChatStore(); // Adjusted based on the assumption of useChatStore usage
+  const { user, isReceiverBlocked, isCurrentBlocked, changeBlock, chatId } = useChatStore();
   const { currentUser } = useUserStore();
-
+  const [chat, setChat] = useState(null);
   const [sharedPhotos, setSharedPhotos] = useState([]);
   const [sharedFiles, setSharedFiles] = useState([]);
 
   useEffect(() => {
-    if (!chat) return; // Ensure chat is loaded before fetching photos and files
-    fetchSharedPhotos();
-    fetchSharedFiles();
-    const unsubscribe = subscribeToSharedFiles();
-    return unsubscribe;
+    const unsubscribe = onSnapshot(doc(db, "chats", chatId), (snapshot) => {
+      setChat(snapshot.data());
+    });
+
+    return () => unsubscribe();
+  }, [chatId]);
+
+  const fetchSharedPhotos = useCallback(() => {
+    if (chat && chat.messages) {
+      const photos = chat.messages.filter(msg => msg.type === 'image').map(photo => ({
+        url: photo.fileUrl,
+        createdAt: photo.createdAt.toDate(),
+      }));
+      setSharedPhotos(photos);
+    }
   }, [chat]);
 
-  const fetchSharedPhotos = async () => {
-    try {
-      const photos = chat.messages.filter(msg => msg.type === 'image').map(photo => ({
-       
-        url: photo.fileUrl, // Adjust field name as per your Firestore document
-       
-        createdAt: photo.createdAt.toDate(), // Assuming createdAt is a Firestore timestamp field
-      }));
-
-      setSharedPhotos(photos);
-      console.log('Shared photos:', photos); // Log fetched photos
-    } catch (error) {
-      console.error("Error fetching shared photos:", error);
-      setSharedPhotos([]); // Set to empty array on error
-    }
-  };
-
-  const fetchSharedFiles = async () => {
-    try {
+  const fetchSharedFiles = useCallback(() => {
+    if (chat && chat.messages) {
       const files = chat.messages.filter(msg => msg.type === 'file').map(file => ({
-       
-        url: file.fileUrl, // Adjust field name as per your Firestore document
-   
-        createdAt: file.createdAt.toDate(), // Assuming createdAt is a Firestore timestamp field
+        url: file.fileUrl,
+        createdAt: file.createdAt.toDate(),
       }));
-
       setSharedFiles(files);
-      console.log('Shared files:', files); // Log fetched files
-    } catch (error) {
-      console.error("Error fetching shared files:", error);
-      setSharedFiles([]); // Set to empty array on error
     }
-  };
+  }, [chat]);
 
-  const loadMorePhotos = async () => {
+  useEffect(() => {
+    fetchSharedPhotos();
+    fetchSharedFiles();
+  }, [chat, fetchSharedPhotos, fetchSharedFiles]);
+
+  const loadMoreItems = (items, setItems, type) => {
     try {
-      const lastPhoto = sharedPhotos[sharedPhotos.length - 1];
-      // Example: Load more photos based on timestamp order
-      const morePhotos = chat.messages
-        .filter(msg => msg.type === 'image' && msg.createdAt > lastPhoto.createdAt)
+      const lastItem = items[items.length - 1];
+      const moreItems = chat.messages
+        .filter(msg => msg.type === type && msg.createdAt > lastItem.createdAt)
         .slice(0, 10)
-        .map(photo => ({
-          id: photo.id,
-          url: photo.fileUrl, // Adjust field name as per your Firestore document
-          name: 'Image', // Example name for images
-          createdAt: photo.createdAt.toDate(), // Assuming createdAt is a Firestore timestamp field
+        .map(item => ({
+          id: item.id,
+          url: item.fileUrl,
+          name: type === 'image' ? 'Image' : 'File',
+          createdAt: item.createdAt.toDate(),
         }));
-
-      setSharedPhotos(prevPhotos => [...prevPhotos, ...morePhotos]);
+      setItems(prevItems => [...prevItems, ...moreItems]);
     } catch (error) {
-      console.error("Error loading more photos:", error);
-      // Handle error if necessary
-    }
-  };
-
-  const loadMoreFiles = async () => {
-    try {
-      const lastFile = sharedFiles[sharedFiles.length - 1];
-      // Example: Load more files based on timestamp order
-      const moreFiles = chat.messages
-        .filter(msg => msg.type === 'file' && msg.createdAt > lastFile.createdAt)
-        .slice(0, 10)
-        .map(file => ({
-          id: file.id,
-          url: file.fileUrl, // Adjust field name as per your Firestore document
-          name: 'File', // Example name for files
-          createdAt: file.createdAt.toDate(), // Assuming createdAt is a Firestore timestamp field
-        }));
-
-      setSharedFiles(prevFiles => [...prevFiles, ...moreFiles]);
-    } catch (error) {
-      console.error("Error loading more files:", error);
-      // Handle error if necessary
+      console.error(`Error loading more ${type === 'image' ? 'photos' : 'files'}:`, error);
     }
   };
 
@@ -127,28 +94,6 @@ const Details = () => {
     }
   };
 
-  const subscribeToSharedFiles = () => {
-    if (!chat) return () => {}; // Return empty function if chat is not loaded
-    const unsubscribe = onSnapshot(collection(db, 'chats', chat.id, 'messages'), (snapshot) => {
-      const files = snapshot.docs.map(doc => {
-        const data = doc.data();
-        if (data.type === 'file') { // Assuming 'type' field distinguishes between images and files
-          return {
-            id: doc.id,
-            url: data.fileUrl, // Adjust field name as per your Firestore document
-            name: 'File', // Example name for files
-            createdAt: data.createdAt.toDate(), // Assuming createdAt is a Firestore timestamp field
-          };
-        }
-        return null;
-      }).filter(file => file !== null);
-
-      setSharedFiles(files);
-    });
-
-    return unsubscribe; // Return the unsubscribe function to use when component unmounts or changes
-  };
-
   return (
     <div className='details'>
       <h1>Details</h1>
@@ -172,11 +117,10 @@ const Details = () => {
             <img src="public/arrowDown.png" alt="" />
           </div>
           <div className="photos">
-            {sharedPhotos.slice(0, 5).map(photo => (
+            {sharedPhotos.map(photo => (
               <div className="photoItem" key={photo.id}>
                 <div className="photoDetails">
-                  <img src={photo.url} alt={photo.name} />
-                  <span>{photo.name}</span>
+                  <img src={photo.url} alt="Shared Photo" />
                 </div>
                 <div className="icon">
                   <img src="public/download.png" alt="Download" />
@@ -184,7 +128,7 @@ const Details = () => {
               </div>
             ))}
             {sharedPhotos.length > 5 && (
-              <button className="loadMoreButton" onClick={loadMorePhotos}>View More</button>
+              <button className="loadMoreButton" onClick={() => loadMoreItems(sharedPhotos, setSharedPhotos, 'image')}>View More</button>
             )}
           </div>
         </div>
@@ -195,32 +139,28 @@ const Details = () => {
             <img src="public/arrowUp.png" alt="" />
           </div>
           <div className="files">
-            {sharedFiles.slice(0, 5).map(file => (
+            {sharedFiles.map(file => (
               <div className="fileItem" key={file.id}>
                 <div className="fileDetails">
+
+                  <img src="public/file.svg" alt="File Icon" className="fileIcon" />
+
                   <a href={file.url} target="_blank" rel="noopener noreferrer">{file.name}</a>
-                </div>
-                <div className="icon">
-                  <img src="public/download.png" alt="Download" />
                 </div>
               </div>
             ))}
-            {sharedFiles.length > 5 && (
-              <button className="loadMoreButton" onClick={loadMoreFiles}>View More</button>
-            )}
+          
           </div>
         </div>
 
-        {/* Block user button */}
         <button onClick={handleBlock} className="blockButton">
           {isCurrentBlocked ? "You are blocked" : isReceiverBlocked ? 'Unblock User' : "Block User"}
         </button>
 
-        {/* Logout button */}
         <button onClick={handleLogout} className='logoutButton'>Logout</button>
       </div>
     </div>
   );
-}
+};
 
 export default Details;
